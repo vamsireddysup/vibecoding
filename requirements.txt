@@ -1,0 +1,9 @@
+selenium
+undetected-chromedriver
+beautifulsoup4
+requests
+pandas
+python-dotenv
+lxml
+fake-useragent
+webdriver-manager

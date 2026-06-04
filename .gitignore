@@ -1,0 +1,7 @@
+credentials.csv
+jobs_output/*.csv
+__pycache__/
+*.pyc
+.env
+venv/
+logs/*.log
