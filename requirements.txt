@@ -7,3 +7,5 @@ python-dotenv
 lxml
 fake-useragent
 webdriver-manager
+gspread
+google-auth

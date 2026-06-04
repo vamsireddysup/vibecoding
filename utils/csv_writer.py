@@ -10,6 +10,7 @@ import os
 # The exact column order every output CSV uses.
 OUTPUT_COLUMNS = [
     "date_scraped",
+    "job_id",
     "platform",
     "company",
     "job_title",
@@ -18,9 +19,11 @@ OUTPUT_COLUMNS = [
     "experience_required",
     "url",
     "date_posted",
+    "days_since_posted",
     "description_snippet",
     "easy_apply",
     "keywords_matched",
+    "skills_required",
 ]
 
 

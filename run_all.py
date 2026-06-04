@@ -23,6 +23,8 @@ import sys
 
 from utils.csv_writer import write_rows
 from utils.deduplicator import update_master
+from utils.enrich import finalize_rows
+from utils import sheets
 
 # Re-export the search/match config so the runner is the single discoverable
 # place for tuning, while the canonical definitions live in utils/matching.py
@@ -75,6 +77,21 @@ TEST_LOCATIONS = ["United States"]
 OUTPUT_DIR = "jobs_output"
 MASTER_PATH = os.path.join(OUTPUT_DIR, "jobs_master.csv")
 
+# Skip jobs posted more than this many days ago.
+MAX_AGE_DAYS = 30
+
+# --- Google Sheets config (runtime auth = service account) ----------------- #
+# Resolution order for each value: credentials.csv "google_sheets" row, then
+# environment variable, then the default below.
+#   credentials.csv row: platform=google_sheets,
+#     username=<path to service_account.json>,
+#     career_url=<Career Pages sheet id>, notes=<Applied Jobs sheet id>
+DEFAULT_SERVICE_ACCOUNT_FILE = os.environ.get(
+    "GOOGLE_SERVICE_ACCOUNT_FILE", "service_account.json"
+)
+DEFAULT_CAREER_PAGES_SHEET_ID = sheets.DEFAULT_CAREER_PAGES_SHEET_ID
+DEFAULT_APPLIED_JOBS_SHEET_ID = sheets.DEFAULT_APPLIED_JOBS_SHEET_ID
+
 # Registry of all scrapers keyed by platform name.
 SCRAPER_REGISTRY = {
     "dice": DiceScraper,
@@ -108,11 +125,24 @@ def load_credentials(path="credentials.csv") -> dict:
     return creds
 
 
+def resolve_sheets_config(creds: dict) -> dict:
+    """Resolve service-account key path + sheet ids from credentials/env/defaults."""
+    row = (creds.get("google_sheets") or [{}])[0]
+    sa_file = (row.get("username") or "").strip() or DEFAULT_SERVICE_ACCOUNT_FILE
+    career_id = (row.get("career_url") or "").strip() or DEFAULT_CAREER_PAGES_SHEET_ID
+    applied_id = (row.get("notes") or "").strip() or DEFAULT_APPLIED_JOBS_SHEET_ID
+    return {
+        "service_account_file": sa_file,
+        "career_pages_sheet_id": career_id,
+        "applied_jobs_sheet_id": applied_id,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
-def run(selected=None, keywords=None, locations=None) -> list:
-    creds = load_credentials()
+def run(selected=None, keywords=None, locations=None, creds=None, career_pages=None) -> list:
+    creds = creds if creds is not None else load_credentials()
     keywords = keywords or SEARCH_KEYWORDS
     locations = locations or LOCATIONS
 
@@ -125,7 +155,10 @@ def run(selected=None, keywords=None, locations=None) -> list:
             continue
         print(f"\n=== Running {key} ===")
         try:
-            scraper = scraper_cls(creds)
+            if key == "company_careers":
+                scraper = scraper_cls(creds, career_pages=career_pages)
+            else:
+                scraper = scraper_cls(creds)
             rows = scraper.scrape_all(keywords, locations)
             print(f"[runner] {key}: {len(rows)} rows collected")
             all_rows.extend(rows)
@@ -163,10 +196,37 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    all_rows = run(selected=selected, keywords=keywords, locations=locations)
+    creds = load_credentials()
+    cfg = resolve_sheets_config(creds)
+
+    # Career list comes from the "Career Pages" Google Sheet (company, ats_type,
+    # url); falls back to credentials.csv company_careers rows if unavailable.
+    career_pages = sheets.read_career_pages(
+        cfg["service_account_file"], cfg["career_pages_sheet_id"]
+    )
+    if career_pages:
+        print(f"[runner] loaded {len(career_pages)} companies from Career Pages sheet")
+    else:
+        print("[runner] Career Pages sheet unavailable; using credentials.csv fallback")
+
+    # Applied Jobs sheet -> job_ids to exclude from results.
+    applied_ids = sheets.read_applied_job_ids(
+        cfg["service_account_file"], cfg["applied_jobs_sheet_id"]
+    )
+    print(f"[runner] {len(applied_ids)} applied job_ids loaded for exclusion")
+
+    all_rows = run(
+        selected=selected, keywords=keywords, locations=locations,
+        creds=creds, career_pages=career_pages or None,
+    )
+
+    # Enrich (job_id, days_since_posted, skills_required) and filter
+    # (drop >30 days old; drop already-applied job_ids).
+    fin = finalize_rows(all_rows, applied_ids=applied_ids, max_age_days=MAX_AGE_DAYS)
+    enriched_rows = fin["rows"]
 
     # Deduplicate against the master and split out today's new finds.
-    result = update_master(all_rows, MASTER_PATH)
+    result = update_master(enriched_rows, MASTER_PATH)
     new_rows = result["new"]
 
     today = datetime.date.today().isoformat()
@@ -179,6 +239,9 @@ def main():
     print("SUMMARY")
     print("=" * 60)
     print(f"Scraped rows (raw):     {len(all_rows)}")
+    print(f"Dropped (>30 days old): {fin['dropped_old']}")
+    print(f"Dropped (already applied): {fin['dropped_applied']}")
+    print(f"After enrich/filter:    {len(enriched_rows)}")
     print(f"New jobs (this run):    {len(new_rows)}")
     print(f"Duplicates skipped:     {result['duplicates']}")
     print(f"Master total:           {result['master_count']}")
@@ -193,7 +256,8 @@ def main():
             print(
                 f"  [{r.get('platform')}] {r.get('job_title')} @ "
                 f"{r.get('company')} ({r.get('location')}) "
-                f"-> {r.get('keywords_matched')}"
+                f"| id={r.get('job_id')} | {r.get('days_since_posted')}d "
+                f"| kw={r.get('keywords_matched')} | skills={r.get('skills_required')}"
             )
 
 

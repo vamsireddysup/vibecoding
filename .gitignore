@@ -5,3 +5,5 @@ __pycache__/
 .env
 venv/
 logs/*.log
+service_account.json
+*service_account*.json
