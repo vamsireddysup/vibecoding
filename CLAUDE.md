@@ -55,6 +55,18 @@ easy_apply, keywords_matched, skills_required
 - Skip jobs posted more than 30 days ago (MAX_AGE_DAYS).
 - Skip jobs whose job_id appears in the Applied Jobs sheet.
 
+## Pagination (base_scraper.scrape_keyword_location)
+- Central loop pages each keyword/location; 2-4s sleep between page fetches;
+  logs "platform — keyword K — page P — N jobs found so far".
+- Stop conditions: (1) page returns no rows, (2) a row on the page is >30 days
+  old, (3) MAX_PAGES=10 per-keyword cap.
+- Page mapping: indeed start=(p-1)*10, linkedin start=(p-1)*25 (also stops on
+  auth/login wall), dice/ziprecruiter/jobright page={p}.
+- Handshake overrides scrape_keyword_location: Selenium clicks the next-page
+  button (_click_next) until disabled/missing.
+- Workday (company_careers._workday): offset += limit(20) per page, stops when
+  total<=offset. Greenhouse + Lever return everything in one call (no paging).
+
 ## Search / matching model
 - SEARCH_QUERIES: broad queries submitted to each job site's search bar (run_all.py)
 - MATCH_TOKENS: tokens checked against title + description after fetch. A match on ANY

@@ -21,12 +21,13 @@ class IndeedScraper(BaseScraper):
     platform = "indeed"
     requires_login = False
 
-    def search(self, keyword: str, location: str):
+    def search(self, keyword: str, location: str, page: int = 1):
         q = urllib.parse.quote_plus(keyword)
         loc = urllib.parse.quote_plus("" if location.lower() == "united states" else location)
+        start = (page - 1) * 10  # Indeed pages in increments of 10
         url = (
             f"https://www.indeed.com/jobs?q={q}&l={loc}"
-            "&explvl=entry_level&fromage=7"
+            f"&explvl=entry_level&fromage=7&start={start}"
         )
         resp = self.fetch(url)
         return resp.text

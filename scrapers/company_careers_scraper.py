@@ -19,7 +19,8 @@ import urllib.parse
 
 from bs4 import BeautifulSoup
 
-from scrapers.base_scraper import BaseScraper
+from scrapers.base_scraper import MAX_AGE_DAYS, BaseScraper
+from utils.enrich import parse_days_since_posted
 from utils.matching import SEARCH_QUERIES, matches_any_token
 
 TODAY = datetime.date.today().isoformat()
@@ -107,6 +108,12 @@ class CompanyCareersScraper(BaseScraper):
     # ATS handlers
     # ------------------------------------------------------------------ #
     @staticmethod
+    def _is_old(date_posted: str) -> bool:
+        """True if a posting date parses to more than MAX_AGE_DAYS ago."""
+        days = parse_days_since_posted(date_posted)
+        return isinstance(days, int) and days > MAX_AGE_DAYS
+
+    @staticmethod
     def _slug(url: str) -> str:
         path = urllib.parse.urlparse(url).path.strip("/").split("/")
         return path[0] if path and path[0] else urllib.parse.urlparse(url).netloc
@@ -163,34 +170,55 @@ class CompanyCareersScraper(BaseScraper):
         site = path_parts[-1] if path_parts else tenant
         api = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
 
+        limit = 20
         rows = []
         for query in SEARCH_QUERIES:
-            payload = {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": query}
-            try:
-                resp = self.session.post(
-                    api, json=payload,
-                    headers={"Accept": "application/json", "Content-Type": "application/json"},
-                    timeout=20,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception:
-                continue
-            for job in data.get("jobPostings", []):
-                title = job.get("title", "")
-                location = job.get("locationsText", "")
-                external = job.get("externalPath", "")
-                job_url = f"https://{host}{external}" if external else url
-                bullets = job.get("bulletFields", [])
-                snippet = " ".join(bullets) if isinstance(bullets, list) else str(bullets)
-                matched = matches_any_token(title, snippet)
-                if not matched:
-                    continue
-                rows.append(self._row(
-                    name or tenant, title, location, job_url, snippet[:300], matched,
-                    date_posted=job.get("postedOn", ""),
-                ))
-            self.polite_sleep(1, 3)
+            # Page by incrementing offset; stop on total<=offset, empty page,
+            # a >30-day-old posting, or the MAX_PAGES cap.
+            offset = 0
+            for page in range(1, self.MAX_PAGES + 1):
+                payload = {"appliedFacets": {}, "limit": limit, "offset": offset,
+                           "searchText": query}
+                try:
+                    resp = self.session.post(
+                        api, json=payload,
+                        headers={"Accept": "application/json", "Content-Type": "application/json"},
+                        timeout=20,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception:
+                    break
+                postings = data.get("jobPostings", []) or []
+                if not postings:  # stop 1
+                    break
+                page_old = False
+                for job in postings:
+                    title = job.get("title", "")
+                    location = job.get("locationsText", "")
+                    external = job.get("externalPath", "")
+                    job_url = f"https://{host}{external}" if external else url
+                    bullets = job.get("bulletFields", [])
+                    snippet = " ".join(bullets) if isinstance(bullets, list) else str(bullets)
+                    posted = job.get("postedOn", "")
+                    if not page_old and self._is_old(posted):
+                        page_old = True
+                    matched = matches_any_token(title, snippet)
+                    if not matched:
+                        continue
+                    rows.append(self._row(
+                        name or tenant, title, location, job_url, snippet[:300], matched,
+                        date_posted=posted,
+                    ))
+                print(f"company_careers — keyword {query} — page {page} — "
+                      f"{len(rows)} jobs found so far ({name or tenant})")
+                offset += limit
+                total = data.get("total", 0)
+                if total and total <= offset:  # stop: Workday total reached
+                    break
+                if page_old:  # stop 2
+                    break
+                self.polite_sleep(2, 4)
         return rows
 
     def _other(self, entry: dict) -> list:
