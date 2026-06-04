@@ -30,9 +30,30 @@ jobs_output/jobs_YYYY-MM-DD.csv — new file each run (today's new finds)
 jobs_output/jobs_master.csv — deduplicated running master list
 
 ## Output CSV schema (exact column order)
-date_scraped, platform, company, job_title, location, job_type,
-experience_required, url, date_posted, description_snippet,
-easy_apply, keywords_matched
+date_scraped, job_id, platform, company, job_title, location, job_type,
+experience_required, url, date_posted, days_since_posted, description_snippet,
+easy_apply, keywords_matched, skills_required
+- job_id: stable per-platform id (utils/enrich.py extract_job_id); namespaced
+  as "{platform}:{id}", hash fallback when no id can be parsed.
+- days_since_posted: integer days from date_posted to today ("" if unknown).
+- skills_required: comma-separated skills parsed from title+description
+  (utils/enrich.py SKILL_TOKENS / extract_skills).
+
+## Google Sheets integration (runtime = service account)
+- Sheets live in the Drive "Job Search" folder:
+  - Career Pages (id 1juHBypajEDruUA_OL2oXR-kXv9XoN2flRfx_I06EIGI): company, ats_type, url
+  - Applied Jobs (id 1x0pTuDrsqnINicLCq6wcH-ZmEpKXtyNvKvt6QKqH_IQ): job_id column
+- utils/sheets.py reads them via gspread + a service-account JSON key.
+- ats_type routes each company (company_careers_scraper): workday | greenhouse |
+  lever | other (Selenium+BS4 fallback). Blank ats_type is auto-detected from URL.
+- Config resolution (run_all.resolve_sheets_config): credentials.csv "google_sheets"
+  row (username=key path, career_url=Career Pages id, notes=Applied Jobs id) ->
+  env GOOGLE_SERVICE_ACCOUNT_FILE -> defaults in utils/sheets.py.
+- All sheet access degrades gracefully (missing key/gspread -> warn + local fallback).
+
+## Filtering rules (run_all -> utils/enrich.finalize_rows)
+- Skip jobs posted more than 30 days ago (MAX_AGE_DAYS).
+- Skip jobs whose job_id appears in the Applied Jobs sheet.
 
 ## Search / matching model
 - SEARCH_QUERIES: broad queries submitted to each job site's search bar (run_all.py)
@@ -52,6 +73,9 @@ easy_apply, keywords_matched
 - scrapers/company_careers_scraper.py
 - utils/deduplicator.py
 - utils/csv_writer.py
+- utils/matching.py    ← SEARCH_QUERIES, MATCH_TOKENS, matches_any_token
+- utils/enrich.py      ← job_id, days_since_posted, skills, 30-day + applied filters
+- utils/sheets.py      ← Google Sheets (service account) reader
 - run_all.py  ← master runner (config + orchestration)
 - credentials.csv  ← gitignored, user fills in
 - credentials_template.csv  ← committed, shows format with no real data

@@ -62,23 +62,76 @@ python run_all.py --list             # list available scraper keys
 Every row uses these exact columns:
 
 ```
-date_scraped, platform, company, job_title, location, job_type,
-experience_required, url, date_posted, description_snippet,
-easy_apply, keywords_matched
+date_scraped, job_id, platform, company, job_title, location, job_type,
+experience_required, url, date_posted, days_since_posted, description_snippet,
+easy_apply, keywords_matched, skills_required
 ```
 
-`keywords_matched` is the comma-separated list of tokens that qualified the job.
+- `job_id` — stable per-platform id (e.g. `linkedin:3856712345`,
+  `company_careers:8437000002`), with a deterministic hash fallback. Used for
+  the Applied Jobs exclusion.
+- `days_since_posted` — integer days from `date_posted` to today (blank if the
+  posting date couldn't be parsed).
+- `keywords_matched` — comma-separated MATCH_TOKENS that qualified the job.
+- `skills_required` — comma-separated skills parsed from the title + description.
+
+### Filtering
+- Jobs posted **more than 30 days ago** are skipped.
+- Jobs whose `job_id` appears in the **Applied Jobs** sheet are skipped.
+
+## Google Sheets integration
+
+The company list and the applied-jobs exclusion list are read at runtime from
+two sheets in your Drive **Job Search/** folder:
+
+| Sheet | Columns | Purpose |
+|-------|---------|---------|
+| **Career Pages** | `company, ats_type, url` | companies to scrape + how to route them |
+| **Applied Jobs** | `job_id` (+ any notes columns) | job_ids to exclude |
+
+`ats_type` routes each company to the right scraper:
+
+- `workday` → POST to the Workday JSON API
+- `greenhouse` → `https://boards.greenhouse.io/{company}/jobs.json`
+- `lever` → the Lever postings JSON
+- `other` → Selenium + BeautifulSoup fallback (renders the page, crawls job links)
+
+A blank `ats_type` is auto-detected from the URL.
+
+### Runtime auth — service account
+
+The nightly cron job runs standalone, so it authenticates with a Google
+**service account** (not an interactive login):
+
+1. In Google Cloud, create a service account, enable the **Google Sheets API**
+   and **Google Drive API**, and download its JSON key as `service_account.json`
+   in the project root (gitignored).
+2. Share both sheets with the service account's `client_email` (Viewer is enough).
+3. Tell the scraper where the key + sheets are. Either:
+   - add a `google_sheets` row to `credentials.csv`:
+     ```
+     google_sheets,<path/to/service_account.json>,,<Career Pages sheet id>,<Applied Jobs sheet id>
+     ```
+     (`username`=key path, `career_url`=Career Pages id, `notes`=Applied Jobs id), or
+   - set `GOOGLE_SERVICE_ACCOUNT_FILE` env var; sheet ids fall back to the
+     defaults baked into `utils/sheets.py`.
+
+If the key or `gspread` is missing, the scraper prints a warning and falls back
+to the `company_careers` rows in `credentials.csv` (no applied-jobs exclusion).
 
 ## Add a new company career page
 
-Add a row to `credentials.csv`:
+Add a row to the **Career Pages** Google Sheet: `company, ats_type, url`
+(leave `ats_type` blank to auto-detect, or set `workday`/`greenhouse`/`lever`/`other`).
+
+If you're not using Google Sheets, add a fallback row to `credentials.csv`:
 
 ```
 company_careers,,,https://boards.greenhouse.io/yourcompany,No login
 ```
 
 The scraper auto-detects Greenhouse / Lever / Workday URLs and uses their
-structured endpoints; any other URL is crawled generically for job links.
+structured endpoints; any other URL is crawled with Selenium + BeautifulSoup.
 
 ## Add / tune search keywords
 
