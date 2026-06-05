@@ -22,6 +22,9 @@ import requests
 # Import order matters; keep heavy/optional deps lazily imported in methods so
 # that no-login scrapers can run in environments without a browser installed.
 
+# Jobs older than this are the pagination cutoff (matches utils.enrich.MAX_AGE_DAYS).
+MAX_AGE_DAYS = 30
+
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
@@ -42,6 +45,9 @@ class BaseScraper:
 
     # Whether this scraper needs a logged-in browser session.
     requires_login = False
+
+    # Hard cap on pages fetched per keyword per platform (anti-ban safety limit).
+    MAX_PAGES = 10
 
     def __init__(self, credentials: dict):
         """credentials: dict keyed by platform -> list of credential rows."""
@@ -118,16 +124,71 @@ class BaseScraper:
         """Override for login-required platforms. Default: no-op."""
         return False
 
-    def search(self, keyword: str, location: str):
-        """Return raw result payload (HTML/JSON/driver state) for one query."""
+    def search(self, keyword: str, location: str, page: int = 1):
+        """Return raw result payload (HTML/JSON/driver state) for one page.
+
+        ``page`` is 1-indexed. Each scraper maps it to the platform's paging
+        scheme (offset, start, or page number).
+        """
         raise NotImplementedError
 
     def parse_results(self, raw) -> list:
         """Parse a raw payload into a list of dicts matching the output schema."""
         raise NotImplementedError
 
+    # ------------------------------------------------------------------ #
+    # Pagination
+    # ------------------------------------------------------------------ #
+    def _page_has_old_job(self, rows: list) -> bool:
+        """True if any row on the page was posted more than MAX_AGE_DAYS ago.
+
+        Best-effort: rows without a parseable date_posted don't trigger it.
+        """
+        from utils.enrich import parse_days_since_posted
+
+        for r in rows:
+            days = parse_days_since_posted(r.get("date_posted", ""))
+            if isinstance(days, int) and days > MAX_AGE_DAYS:
+                return True
+        return False
+
+    def scrape_keyword_location(self, keyword: str, location: str) -> list:
+        """Fetch successive pages for one keyword/location until a stop condition.
+
+        Stop conditions:
+          1. a page returns no results
+          2. a job on the page is older than MAX_AGE_DAYS (30) days
+          3. the MAX_PAGES (10) per-keyword safety cap is reached
+        Sleeps 2-4s between page fetches.
+        """
+        all_rows = []
+        for page in range(1, self.MAX_PAGES + 1):
+            try:
+                raw = self.search(keyword, location, page)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[{self.platform}] '{keyword}' page {page} fetch error: {exc}")
+                break
+            rows = self.parse_results(raw) or []
+            for r in rows:
+                r.setdefault("platform", self.platform)
+            all_rows.extend(rows)
+            print(
+                f"{self.platform} — keyword {keyword} — page {page} — "
+                f"{len(all_rows)} jobs found so far"
+            )
+
+            if not rows:  # stop 1: no more results
+                break
+            if self._page_has_old_job(rows):  # stop 2: hit a >30-day-old posting
+                print(f"[{self.platform}] '{keyword}' page {page}: job older than "
+                      f"{MAX_AGE_DAYS} days — stopping pagination")
+                break
+            if page < self.MAX_PAGES:
+                self.polite_sleep(2, 4)  # stop 3 handled by range cap
+        return all_rows
+
     def scrape_all(self, keywords: list, locations: list) -> list:
-        """Run search + parse for all keyword x location combos.
+        """Run paginated search + parse for all keyword x location combos.
 
         Each combo is wrapped in try/except so a single failure does not abort
         the rest. Returns the combined list of parsed rows.
@@ -145,13 +206,8 @@ class BaseScraper:
             for keyword in keywords:
                 for location in locations:
                     try:
-                        raw = self.search(keyword, location)
-                        rows = self.parse_results(raw) or []
-                        # Tag platform on every row in case the parser forgot.
-                        for r in rows:
-                            r.setdefault("platform", self.platform)
+                        rows = self.scrape_keyword_location(keyword, location)
                         results.extend(rows)
-                        print(f"[{self.platform}] '{keyword}' @ '{location}': {len(rows)} rows")
                     except Exception as exc:  # noqa: BLE001
                         print(f"[{self.platform}] error '{keyword}' @ '{location}': {exc}")
                     self.polite_sleep()

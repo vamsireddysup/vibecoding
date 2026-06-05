@@ -47,17 +47,24 @@ class LinkedInScraper(BaseScraper):
             return False
         return "feed" in driver.current_url or "checkpoint" not in driver.current_url
 
-    def search(self, keyword: str, location: str):
+    def search(self, keyword: str, location: str, page: int = 1):
         kw = urllib.parse.quote(keyword)
         loc = urllib.parse.quote(location)
+        start = (page - 1) * 25  # LinkedIn pages in increments of 25
         # f_E=1,2 => internship + entry level; f_TPR=r86400 => last 24h.
         url = (
             f"https://www.linkedin.com/jobs/search/?keywords={kw}"
-            f"&location={loc}&f_TPR=r86400&f_E=1%2C2"
+            f"&location={loc}&f_TPR=r86400&f_E=1%2C2&start={start}"
         )
         driver = self.init_driver(headless=True)
         driver.get(url)
         self.polite_sleep(3, 6)
+        # If LinkedIn bounced us to the auth/login wall, signal "no results" so
+        # pagination stops cleanly.
+        cur = (driver.current_url or "").lower()
+        if "authwall" in cur or "/login" in cur or "/checkpoint" in cur:
+            print(f"[linkedin] login wall hit on page {page}; stopping")
+            return ""
         # Scroll to load more cards.
         try:
             for _ in range(3):

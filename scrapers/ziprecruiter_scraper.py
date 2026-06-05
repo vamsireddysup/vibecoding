@@ -18,10 +18,13 @@ class ZipRecruiterScraper(BaseScraper):
     platform = "ziprecruiter"
     requires_login = False
 
-    def search(self, keyword: str, location: str):
+    def search(self, keyword: str, location: str, page: int = 1):
         q = urllib.parse.quote_plus(keyword)
         loc = urllib.parse.quote_plus("" if location.lower() == "united states" else location)
-        url = f"https://www.ziprecruiter.com/jobs-search?search={q}&location={loc}&days=7"
+        url = (
+            f"https://www.ziprecruiter.com/jobs-search?search={q}"
+            f"&location={loc}&days=7&page={page}"
+        )
         resp = self.fetch(url)
         return resp.text
 

@@ -19,10 +19,10 @@ class JobrightScraper(BaseScraper):
     platform = "jobright"
     requires_login = False  # login optional; not required for public search
 
-    def search(self, keyword: str, location: str):
+    def search(self, keyword: str, location: str, page: int = 1):
         q = urllib.parse.quote_plus(keyword)
         loc = urllib.parse.quote_plus(location)
-        url = f"https://jobright.ai/jobs/search?keyword={q}&location={loc}"
+        url = f"https://jobright.ai/jobs/search?keyword={q}&location={loc}&page={page}"
 
         # Try requests first.
         try:

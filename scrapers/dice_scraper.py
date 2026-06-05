@@ -26,13 +26,13 @@ class DiceScraper(BaseScraper):
     # Public search API the Dice web app calls.
     API_URL = "https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs/search"
 
-    def search(self, keyword: str, location: str):
+    def search(self, keyword: str, location: str, page: int = 1):
         params = {
             "q": keyword,
             "locationPrecision": "City",
             "radius": "30",
             "radiusUnit": "mi",
-            "page": "1",
+            "page": str(page),
             "pageSize": "20",
             "filters.postedDate": "ONE_WEEK",
             "filters.employmentType": "FULLTIME",
@@ -61,7 +61,7 @@ class DiceScraper(BaseScraper):
             loc = urllib.parse.quote_plus(location)
             html_url = (
                 f"https://www.dice.com/jobs?q={q}&location={loc}"
-                "&radius=30&radiusUnit=mi&page=1&pageSize=20"
+                f"&radius=30&radiusUnit=mi&page={page}&pageSize=20"
                 "&filters.postedDate=ONE_WEEK&filters.employmentType=FULLTIME"
             )
             resp = self.fetch(html_url)
