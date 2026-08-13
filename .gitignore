@@ -1,9 +1,17 @@
-credentials.csv
-jobs_output/*.csv
-__pycache__/
-*.pyc
+# Local settings / keys must never be committed.
+# The extension stores the user's API key in chrome.storage.local, not on disk,
+# but keep this here in case anyone adds a local config file.
+*.local.json
 .env
-venv/
-logs/*.log
-service_account.json
-*service_account*.json
+
+# Editor / OS noise
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Packaging output
+*.zip
+*.crx
+*.pem
+node_modules/

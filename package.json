@@ -1,0 +1,11 @@
+{
+  "name": "meeting-notes-byok",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chrome extension: local meeting transcription, summarized with your own Claude or ChatGPT key.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/run.mjs"
+  }
+}

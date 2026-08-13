@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Meeting Notes (BYOK)",
+  "version": "0.1.0",
+  "description": "Transcribe meetings locally in your browser, then summarize them with your own Claude or ChatGPT API key.",
+  "minimum_chrome_version": "139",
+
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "unlimitedStorage",
+    "sidePanel",
+    "activeTab",
+    "audioCapture"
+  ],
+
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*"
+  ],
+
+  "background": {
+    "service_worker": "src/sw.js",
+    "type": "module"
+  },
+
+  "side_panel": {
+    "default_path": "src/ui/panel.html"
+  },
+
+  "options_page": "src/ui/settings.html",
+
+  "action": {
+    "default_title": "Meeting Notes"
+  },
+
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}

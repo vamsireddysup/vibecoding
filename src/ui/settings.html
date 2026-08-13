@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Meeting Notes — Settings</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Meeting Notes settings</h1>
+
+      <section class="card">
+        <h2>AI provider</h2>
+        <p class="note">
+          Summaries are generated with <strong>your own API key</strong>, billed to your own
+          account. The key is sent only to the provider you choose, directly from your browser.
+        </p>
+
+        <div class="radio-row">
+          <label><input type="radio" name="provider" value="anthropic" /> Claude (Anthropic)</label>
+          <label><input type="radio" name="provider" value="openai" /> ChatGPT (OpenAI)</label>
+        </div>
+
+        <fieldset id="fs-anthropic">
+          <legend>Anthropic</legend>
+          <label for="anthropic-key">API key</label>
+          <input id="anthropic-key" type="password" placeholder="sk-ant-..." autocomplete="off" />
+          <label for="anthropic-model">Model</label>
+          <select id="anthropic-model"></select>
+        </fieldset>
+
+        <fieldset id="fs-openai">
+          <legend>OpenAI</legend>
+          <label for="openai-key">API key</label>
+          <input id="openai-key" type="password" placeholder="sk-..." autocomplete="off" />
+          <label for="openai-model">Model</label>
+          <input id="openai-model" type="text" spellcheck="false" />
+          <p class="note">
+            Free text on purpose — OpenAI's model names change often. Set whatever your account
+            has access to. A wrong name comes back as a clear "model not found" error.
+          </p>
+        </fieldset>
+      </section>
+
+      <section class="card">
+        <h2>Transcription</h2>
+        <p class="note">
+          Speech is recognized <strong>on your own machine</strong> by Chrome. Audio is never
+          uploaded, and transcription costs nothing.
+        </p>
+
+        <label for="language">Language</label>
+        <select id="language"></select>
+
+        <div class="check-row">
+          <label><input type="checkbox" id="capture-tab" /> Transcribe the meeting tab (other participants)</label>
+          <label><input type="checkbox" id="capture-mic" /> Transcribe my microphone (me)</label>
+        </div>
+
+        <button id="check" class="ghost-btn">Check on-device support</button>
+        <p id="check-result" class="note"></p>
+      </section>
+
+      <section class="card">
+        <h2>Where your data lives</h2>
+        <ul class="note">
+          <li>Transcripts and summaries are stored locally in this browser profile.</li>
+          <li>
+            Your API key is stored in <code>chrome.storage.local</code>, unencrypted. Chrome gives
+            extensions no secret store, so anyone with access to this computer profile could read
+            it. Use a key you can revoke.
+          </li>
+          <li>Nothing is sent anywhere until you press <em>Summarize</em>.</li>
+        </ul>
+      </section>
+
+      <div class="save-row">
+        <button id="save" class="primary-btn">Save settings</button>
+        <span id="saved" class="saved"></span>
+      </div>
+    </main>
+
+    <script type="module" src="settings.js"></script>
+  </body>
+</html>
