@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Meeting Notes</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1>Meeting Notes</h1>
+      <button id="open-settings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+    </header>
+
+    <section class="record-bar">
+      <button id="record" class="record-btn">Start recording</button>
+      <span id="status" class="status" aria-live="polite">Idle</span>
+    </section>
+
+    <div id="alerts" class="alerts" aria-live="polite"></div>
+
+    <!-- List of past meetings -->
+    <section id="view-list" class="view">
+      <h2 class="section-title">Meetings</h2>
+      <ul id="meeting-list" class="meeting-list"></ul>
+      <p id="empty-list" class="empty">
+        No meetings yet. Open your meeting in a browser tab and press
+        <strong>Start recording</strong>.
+      </p>
+    </section>
+
+    <!-- A single meeting: transcript + summary -->
+    <section id="view-meeting" class="view" hidden>
+      <div class="meeting-head">
+        <button id="back" class="link-btn">← All meetings</button>
+        <h2 id="meeting-title" class="meeting-title"></h2>
+        <p id="meeting-meta" class="meta"></p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button id="tab-transcript" class="tab is-active" role="tab">Transcript</button>
+        <button id="tab-summary" class="tab" role="tab">Summary</button>
+      </div>
+
+      <div id="pane-transcript" class="pane">
+        <div id="transcript" class="transcript"></div>
+        <p id="transcript-empty" class="empty">
+          Nothing transcribed yet. Speech appears here a few seconds after someone talks.
+        </p>
+      </div>
+
+      <div id="pane-summary" class="pane" hidden>
+        <button id="summarize" class="primary-btn">Summarize with AI</button>
+        <p id="summary-hint" class="hint"></p>
+        <div id="summary" class="summary"></div>
+      </div>
+
+      <div class="actions">
+        <button id="copy" class="ghost-btn">Copy</button>
+        <button id="export-summary" class="ghost-btn">Export summary</button>
+        <button id="export-transcript" class="ghost-btn">Export transcript</button>
+        <button id="delete" class="ghost-btn danger">Delete</button>
+      </div>
+    </section>
+
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

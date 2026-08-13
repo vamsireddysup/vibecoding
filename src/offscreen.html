@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Meeting Notes capture host</title>
+  </head>
+  <body>
+    <!--
+      Never visible. It exists only because an MV3 service worker has no DOM,
+      and both getUserMedia and SpeechRecognition require a document.
+    -->
+    <script type="module" src="offscreen.js"></script>
+  </body>
+</html>
