@@ -386,3 +386,165 @@ h1 {
 .icon-btn:hover {
   color: var(--text);
 }
+
+/* ------------------------------------------------- meeting detection */
+
+.detected {
+  margin: 10px 0 0;
+  padding: 7px 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 7px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.detected[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------- speakers */
+
+.speakers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.speakers[hidden] {
+  display: none;
+}
+
+.speakers-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------ scroll lock */
+
+.jump-btn {
+  position: sticky;
+  bottom: 8px;
+  display: block;
+  margin: 8px auto 0;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+}
+
+.jump-btn[hidden] {
+  display: none;
+}
+
+/* --------------------------------------------------------- streaming */
+
+/* A caret while text is still arriving, so a pause reads as "working"
+   rather than "finished and short". */
+.summary.is-streaming h3:last-of-type::after,
+.summary.is-streaming p:last-of-type::after {
+  content: "▍";
+  margin-left: 2px;
+  color: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary.is-streaming h3:last-of-type::after,
+  .summary.is-streaming p:last-of-type::after {
+    animation: none;
+  }
+}
+
+/* -------------------------------------------------------------- ask */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.turn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.turn .who {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.turn.user .who {
+  color: var(--you);
+}
+
+.turn.assistant .who {
+  color: var(--others);
+}
+
+.turn .what {
+  white-space: pre-wrap;
+}
+
+.ask-form {
+  display: flex;
+  gap: 6px;
+}
+
+.ask-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.ask-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ask-btn {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 8px 14px;
+}

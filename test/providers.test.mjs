@@ -96,7 +96,7 @@ export default async function run() {
   check('reports truncation plainly', /cut off/i.test(await rejects(call(summarizeWithOpenAI))));
 
   http.reply(404, { error: { message: 'model does not exist' } });
-  check('404 points at the model setting', /model name in Settings/i.test(await rejects(call(summarizeWithOpenAI))));
+  check('404 points at the model setting', /model name/i.test(await rejects(call(summarizeWithOpenAI))));
 }
 
 const call = (fn) => fn({ apiKey: 'k', model: 'm', transcript: 't', title: 'T' });

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Meeting Notes (BYOK)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Transcribe meetings locally in your browser, then summarize them with your own Claude or ChatGPT API key.",
   "minimum_chrome_version": "139",
 
@@ -20,6 +20,25 @@
     "https://api.openai.com/*"
   ],
 
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://*.zoom.us/*",
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*"
+      ],
+      "js": ["src/content/participants.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
   "background": {
     "service_worker": "src/sw.js",
     "type": "module"
@@ -33,6 +52,16 @@
 
   "action": {
     "default_title": "Meeting Notes"
+  },
+
+  "commands": {
+    "toggle-recording": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R",
+        "mac": "Command+Shift+R"
+      },
+      "description": "Start or stop recording the current meeting"
+    }
   },
 
   "icons": {

@@ -1,4 +1,12 @@
-import { ANTHROPIC_MODELS, getSettings, saveSettings } from '../config.js';
+import {
+  ANTHROPIC_MODELS,
+  BASE_URL_PRESETS,
+  OPENAI_DEFAULT_BASE_URL,
+  SUMMARY_STYLES,
+  getSettings,
+  isLocalEndpoint,
+  saveSettings,
+} from '../config.js';
 import { ensureOnDeviceReady, isSupported } from '../capture/chrome-speech.js';
 
 // Chrome's on-device speech packs cover a limited set of languages; this is the
@@ -36,54 +44,118 @@ function fillSelect(select, entries) {
   }
 }
 
-function selectedProvider() {
-  return document.querySelector('input[name="provider"]:checked')?.value || 'anthropic';
-}
+const selectedProvider = () =>
+  document.querySelector('input[name="provider"]:checked')?.value || 'anthropic';
 
-function syncProviderVisibility() {
+function syncVisibility() {
   const provider = selectedProvider();
   $('fs-anthropic').hidden = provider !== 'anthropic';
   $('fs-openai').hidden = provider !== 'openai';
+  $('key-optional').hidden = !isLocalEndpoint($('openai-base-url').value);
+  $('custom-prompt-wrap').hidden = $('summary-style').value !== 'custom';
+}
+
+function renderPresets() {
+  const wrap = $('presets');
+  wrap.replaceChildren();
+  for (const preset of BASE_URL_PRESETS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chip';
+    button.textContent = preset.label;
+    button.title = preset.url;
+    button.addEventListener('click', () => {
+      $('openai-base-url').value = preset.url;
+      syncVisibility();
+    });
+    wrap.appendChild(button);
+  }
 }
 
 async function load() {
-  fillSelect($('anthropic-model'), ANTHROPIC_MODELS.map((m) => [m.id, m.label]));
+  fillSelect(
+    $('anthropic-model'),
+    ANTHROPIC_MODELS.map((m) => [m.id, m.label])
+  );
   fillSelect($('language'), LANGUAGES);
+  fillSelect(
+    $('summary-style'),
+    SUMMARY_STYLES.map((s) => [s.id, s.label])
+  );
+  renderPresets();
 
   const settings = await getSettings();
 
   document
     .querySelectorAll('input[name="provider"]')
-    .forEach((radio) => (radio.checked = radio.value === settings.provider));
+    .forEach((radio) => {
+      radio.checked = radio.value === settings.provider;
+    });
 
   $('anthropic-key').value = settings.anthropicKey;
   $('anthropic-model').value = settings.anthropicModel;
   $('openai-key').value = settings.openaiKey;
   $('openai-model').value = settings.openaiModel;
+  $('openai-base-url').value = settings.openaiBaseUrl || OPENAI_DEFAULT_BASE_URL;
+  $('summary-style').value = settings.summaryStyle;
+  $('custom-prompt').value = settings.customPrompt;
   $('capture-tab').checked = settings.captureTab;
   $('capture-mic').checked = settings.captureMic;
+  $('auto-start').checked = settings.autoStart;
+  $('show-cost').checked = settings.showCostEstimate;
 
-  // A previously saved language may not be in the list if it was set by an
-  // older version; fall back rather than showing a blank select.
+  // A saved language may not be in the list if an older version set it; fall
+  // back rather than showing a blank select.
   const known = LANGUAGES.some(([code]) => code === settings.language);
   $('language').value = known ? settings.language : 'en-US';
 
-  syncProviderVisibility();
+  syncVisibility();
 }
 
 document
   .querySelectorAll('input[name="provider"]')
-  .forEach((radio) => radio.addEventListener('change', syncProviderVisibility));
+  .forEach((radio) => radio.addEventListener('change', syncVisibility));
+$('summary-style').addEventListener('change', syncVisibility);
+$('openai-base-url').addEventListener('input', syncVisibility);
+
+/**
+ * A custom endpoint needs host permission, which MV3 cannot declare statically
+ * for an arbitrary URL. Ask for it at save time, when the user has just typed
+ * the host and the prompt makes sense, rather than at first use mid-meeting.
+ */
+async function ensureHostPermission(baseUrl) {
+  if (!baseUrl || baseUrl === OPENAI_DEFAULT_BASE_URL) return true;
+  let origin;
+  try {
+    origin = `${new URL(baseUrl).origin}/*`;
+  } catch {
+    return false;
+  }
+  if (await chrome.permissions.contains({ origins: [origin] })) return true;
+  return chrome.permissions.request({ origins: [origin] });
+}
 
 $('save').addEventListener('click', async () => {
+  const saved = $('saved');
+  const fail = (message) => {
+    saved.textContent = message;
+    saved.className = 'saved result-bad';
+  };
+
   const captureTab = $('capture-tab').checked;
   const captureMic = $('capture-mic').checked;
-  const saved = $('saved');
+  if (!captureTab && !captureMic) return fail('Enable at least one audio source.');
 
-  if (!captureTab && !captureMic) {
-    saved.textContent = 'Enable at least one audio source.';
-    saved.className = 'saved result-bad';
-    return;
+  const baseUrl = $('openai-base-url').value.trim() || OPENAI_DEFAULT_BASE_URL;
+  if (selectedProvider() === 'openai') {
+    try {
+      new URL(baseUrl);
+    } catch {
+      return fail('That base URL is not a valid URL.');
+    }
+    if (!(await ensureHostPermission(baseUrl))) {
+      return fail('Permission for that host was declined, so calls to it would fail.');
+    }
   }
 
   await saveSettings({
@@ -92,14 +164,22 @@ $('save').addEventListener('click', async () => {
     anthropicModel: $('anthropic-model').value,
     openaiKey: $('openai-key').value.trim(),
     openaiModel: $('openai-model').value.trim(),
+    openaiBaseUrl: baseUrl.replace(/\/+$/, ''),
+    summaryStyle: $('summary-style').value,
+    customPrompt: $('custom-prompt').value.trim(),
     language: $('language').value,
     captureTab,
     captureMic,
+    autoStart: $('auto-start').checked,
+    showCostEstimate: $('show-cost').checked,
   });
 
   saved.textContent = 'Saved';
   saved.className = 'saved';
-  setTimeout(() => (saved.textContent = ''), 1600);
+  setTimeout(() => {
+    saved.textContent = '';
+  }, 1600);
+  return undefined;
 });
 
 $('check').addEventListener('click', async () => {
@@ -125,9 +205,7 @@ $('check').addEventListener('click', async () => {
     return;
   }
 
-  result.textContent = ok
-    ? `On-device recognition is ready for ${language}.`
-    : message;
+  result.textContent = ok ? `On-device recognition is ready for ${language}.` : message;
   result.className = ok ? 'note result-ok' : 'note result-bad';
 });
 

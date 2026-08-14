@@ -18,7 +18,7 @@ import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-const SUITES = ['summary', 'store', 'providers', 'speech'];
+const SUITES = ['summary', 'store', 'providers', 'speech', 'partial-json', 'dedupe', 'streaming'];
 
 const runSuite = (name) =>
   new Promise((resolve) => {

@@ -18,7 +18,7 @@
 
         <div class="radio-row">
           <label><input type="radio" name="provider" value="anthropic" /> Claude (Anthropic)</label>
-          <label><input type="radio" name="provider" value="openai" /> ChatGPT (OpenAI)</label>
+          <label><input type="radio" name="provider" value="openai" /> ChatGPT / OpenAI-compatible</label>
         </div>
 
         <fieldset id="fs-anthropic">
@@ -30,16 +30,52 @@
         </fieldset>
 
         <fieldset id="fs-openai">
-          <legend>OpenAI</legend>
+          <legend>OpenAI-compatible</legend>
+
+          <label for="openai-base-url">API base URL</label>
+          <input id="openai-base-url" type="text" spellcheck="false" />
+          <div id="presets" class="presets"></div>
+          <p class="note">
+            Any OpenAI-compatible endpoint works: OpenAI, Ollama, LM Studio, OpenRouter, Azure, or
+            your own gateway. Pointing this at a <strong>local</strong> model means a meeting never
+            leaves your machine — not the audio, and not the transcript.
+          </p>
+
           <label for="openai-key">API key</label>
           <input id="openai-key" type="password" placeholder="sk-..." autocomplete="off" />
+          <p id="key-optional" class="note" hidden>
+            Local endpoints usually need no key — leave this blank.
+          </p>
+
           <label for="openai-model">Model</label>
           <input id="openai-model" type="text" spellcheck="false" />
           <p class="note">
-            Free text on purpose — OpenAI's model names change often. Set whatever your account
-            has access to. A wrong name comes back as a clear "model not found" error.
+            Free text on purpose — model names change often, and differ per server. A wrong name
+            comes back as a clear "not found" error.
           </p>
         </fieldset>
+      </section>
+
+      <section class="card">
+        <h2>Summaries</h2>
+        <label for="summary-style">Style</label>
+        <select id="summary-style"></select>
+
+        <div id="custom-prompt-wrap" hidden>
+          <label for="custom-prompt">Custom instructions</label>
+          <textarea id="custom-prompt" rows="5" spellcheck="false"></textarea>
+          <p class="note">
+            Added to the built-in instructions rather than replacing them, so the rules that stop
+            the model inventing owners and deadlines stay in force.
+          </p>
+        </div>
+
+        <div class="check-row">
+          <label>
+            <input type="checkbox" id="show-cost" />
+            Show an estimated token count and cost before each call
+          </label>
+        </div>
       </section>
 
       <section class="card">
@@ -55,6 +91,7 @@
         <div class="check-row">
           <label><input type="checkbox" id="capture-tab" /> Transcribe the meeting tab (other participants)</label>
           <label><input type="checkbox" id="capture-mic" /> Transcribe my microphone (me)</label>
+          <label><input type="checkbox" id="auto-start" /> Offer to start recording automatically on meeting pages</label>
         </div>
 
         <button id="check" class="ghost-btn">Check on-device support</button>
@@ -70,7 +107,7 @@
             extensions no secret store, so anyone with access to this computer profile could read
             it. Use a key you can revoke.
           </li>
-          <li>Nothing is sent anywhere until you press <em>Summarize</em>.</li>
+          <li>Nothing is sent anywhere until you press <em>Summarize</em> or ask a question.</li>
         </ul>
       </section>
 

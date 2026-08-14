@@ -156,3 +156,73 @@ export function installSpeechRecognitionMock() {
 }
 
 export const liveTrack = () => ({ kind: 'audio', readyState: 'live' });
+
+/**
+ * Enough of the extension APIs for sw.js to be imported outside a browser.
+ * It registers listeners at module scope, so these must exist before import.
+ */
+export function installChromeRuntimeMock({ tab = {} } = {}) {
+  const mem = {};
+  const sent = [];
+  globalThis.chrome = {
+    storage: {
+      local: {
+        async get(k) {
+          const keys = Array.isArray(k) ? k : [k];
+          const out = {};
+          for (const key of keys) if (key in mem) out[key] = structuredClone(mem[key]);
+          return out;
+        },
+        async set(obj) {
+          for (const [k, v] of Object.entries(obj)) mem[k] = structuredClone(v);
+        },
+        async remove(k) {
+          (Array.isArray(k) ? k : [k]).forEach((key) => delete mem[key]);
+        },
+      },
+    },
+    runtime: {
+      onInstalled: { addListener() {} },
+      onMessage: { addListener() {} },
+      getContexts: async () => [],
+      sendMessage: async (msg) => {
+        sent.push(msg);
+        return { ok: true };
+      },
+    },
+    commands: { onCommand: { addListener() {} } },
+    sidePanel: { setPanelBehavior: async () => {} },
+    offscreen: {
+      hasDocument: async () => false,
+      createDocument: async () => {},
+      closeDocument: async () => {},
+    },
+    tabs: { query: async () => [tab] },
+    tabCapture: { getMediaStreamId: async () => 'stream-1' },
+    permissions: { request: async () => true, contains: async () => true },
+  };
+  return { mem, sent };
+}
+
+/** Fake SSE response body, for exercising the streaming paths. */
+export function sseResponse(events, { status = 200 } = {}) {
+  const chunks = events.map((e) => `data: ${JSON.stringify(e)}\n\n`);
+  chunks.push('data: [DONE]\n\n');
+  const encoder = new TextEncoder();
+  let i = 0;
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    url: 'https://example.test/stream',
+    headers: { get: () => null },
+    body: {
+      getReader: () => ({
+        read: async () =>
+          i < chunks.length
+            ? { done: false, value: encoder.encode(chunks[i++]) }
+            : { done: true, value: undefined },
+      }),
+    },
+    json: async () => ({}),
+  };
+}

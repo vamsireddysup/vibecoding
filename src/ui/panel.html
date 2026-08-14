@@ -16,6 +16,8 @@
       <span id="status" class="status" aria-live="polite">Idle</span>
     </section>
 
+    <p id="detected" class="detected" hidden></p>
+
     <div id="alerts" class="alerts" aria-live="polite"></div>
 
     <!-- List of past meetings -->
@@ -28,7 +30,7 @@
       </p>
     </section>
 
-    <!-- A single meeting: transcript + summary -->
+    <!-- A single meeting: transcript, summary, questions -->
     <section id="view-meeting" class="view" hidden>
       <div class="meeting-head">
         <button id="back" class="link-btn">← All meetings</button>
@@ -39,19 +41,37 @@
       <div class="tabs" role="tablist">
         <button id="tab-transcript" class="tab is-active" role="tab">Transcript</button>
         <button id="tab-summary" class="tab" role="tab">Summary</button>
+        <button id="tab-ask" class="tab" role="tab">Ask</button>
       </div>
 
       <div id="pane-transcript" class="pane">
+        <div id="speakers" class="speakers" hidden></div>
         <div id="transcript" class="transcript"></div>
         <p id="transcript-empty" class="empty">
           Nothing transcribed yet. Speech appears here a few seconds after someone talks.
         </p>
+        <button id="jump-latest" class="jump-btn" hidden>Jump to latest ↓</button>
       </div>
 
       <div id="pane-summary" class="pane" hidden>
         <button id="summarize" class="primary-btn">Summarize with AI</button>
         <p id="summary-hint" class="hint"></p>
         <div id="summary" class="summary"></div>
+      </div>
+
+      <div id="pane-ask" class="pane" hidden>
+        <div id="chat" class="chat"></div>
+        <form id="ask-form" class="ask-form">
+          <input
+            id="question"
+            class="ask-input"
+            type="text"
+            placeholder="What did we decide about the launch?"
+            autocomplete="off"
+          />
+          <button id="ask" class="primary-btn ask-btn" type="submit">Ask</button>
+        </form>
+        <p id="ask-hint" class="hint"></p>
       </div>
 
       <div class="actions">

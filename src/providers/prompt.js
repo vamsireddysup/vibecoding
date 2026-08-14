@@ -60,10 +60,11 @@ proper nouns and technical terms, dropped words, and occasional duplicated phras
 where the recognizer restarted. Read through these errors to the intended meaning.
 Do not comment on transcript quality in your output.
 
-Speakers are labelled only as "You" (the person running the extension) and
-"Others" (everyone else on the call). Where someone states their own name, or is
-addressed by name, you may use that name. Otherwise refer to people as "You" or
-"a participant" — never guess which individual said something.
+Speaker labels are "You" (the person running the extension) and either the names
+of participants, where the extension could identify them, or "Others" where it
+could not. Trust a name that appears as a speaker label. Where someone states
+their own name, or is addressed by name, you may use that too. Never guess which
+individual said something labelled "Others" — write "a participant" instead.
 
 Rules that matter more than completeness:
 
@@ -81,16 +82,55 @@ Write the way a colleague who attended would write up notes afterwards: plain,
 specific sentences. No preamble, no meta-commentary, no filler.
 `.trim();
 
+/**
+ * Style-specific guidance appended to the shared prompt. The output schema is
+ * identical across styles, so rendering and export never branch on style.
+ */
+const STYLE_GUIDANCE = {
+  notes: '',
+  exec: `
+This summary is for someone who did not attend and has two minutes. Keep the
+tldr to two sentences. Limit "keyPoints" to the four or five items that would
+change a decision; omit detail that only matters to people already close to the
+work.`,
+  decisions: `
+Report only what was concluded or assigned. Leave "keyPoints" empty unless a
+point is needed to make a decision or action intelligible. Do not summarize
+discussion that reached no conclusion.`,
+};
+
+/**
+ * Build the system prompt for a style. A custom prompt replaces the guidance,
+ * never the schema rules — otherwise a user's phrasing could quietly disable the
+ * "do not invent owners" rule, which is the one that keeps output trustworthy.
+ */
+export function buildSystemPrompt({ style = 'notes', customPrompt = '' } = {}) {
+  const extra =
+    style === 'custom' ? (customPrompt || '').trim() : (STYLE_GUIDANCE[style] || '').trim();
+  return extra ? `${SYSTEM_PROMPT}\n\n${extra}` : SYSTEM_PROMPT;
+}
+
 export function buildUserMessage({ title, transcript }) {
-  return [
-    title ? `Meeting: ${title}` : null,
-    '',
-    'Transcript:',
-    transcript,
-  ]
+  return [title ? `Meeting: ${title}` : null, '', 'Transcript:', transcript]
     .filter((part) => part !== null)
     .join('\n');
 }
+
+/** System prompt for follow-up questions about an already-recorded meeting. */
+export const FOLLOWUP_PROMPT = `
+You answer questions about a meeting transcript.
+
+The transcript comes from automatic speech recognition and contains its typical
+errors: missing punctuation, misheard names and technical terms, dropped words.
+Read through them to the intended meaning.
+
+Answer only from the transcript. If it does not contain the answer, say so
+plainly rather than inferring what probably happened — the person asking cannot
+tell the difference between something you read and something you assumed, and
+will act on either.
+
+Be direct and brief. Quote the transcript when the exact wording matters.
+`.trim();
 
 /**
  * Validate and normalize a parsed model response. Structured outputs make the

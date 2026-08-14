@@ -21,6 +21,7 @@
  */
 
 import { TranscriptSource } from './source.js';
+import { dropOverlap } from './dedupe.js';
 
 const SpeechRecognitionCtor =
   globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition || null;
@@ -103,6 +104,8 @@ export class ChromeSpeechSource extends TranscriptSource {
   #restartDelay = RESTART_BASE_MS;
   #stopping = false;
   #startedAt = 0;
+  /** Last finalized phrase, kept to detect restart-boundary repeats. */
+  #lastFinalText = '';
 
   async start() {
     if (!SpeechRecognitionCtor) throw new Error('Web Speech API unavailable');
@@ -162,13 +165,22 @@ export class ChromeSpeechSource extends TranscriptSource {
 
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
-        const text = result[0]?.transcript?.trim();
+        const raw = result[0]?.transcript?.trim();
+        if (!raw) continue;
+
+        // A replacement recognizer usually re-reports the words the previous one
+        // finalized just before it died. Strip that overlap from final results
+        // only; interim text is transient and gets replaced anyway.
+        const text = result.isFinal ? dropOverlap(this.#lastFinalText, raw) : raw;
         if (!text) continue;
+        if (result.isFinal) this.#lastFinalText = raw;
+
         this.onLine({
           speaker: this.speaker,
           text,
           interim: !result.isFinal,
           t: Date.now() - this.#startedAt,
+          at: Date.now(), // wall clock, for correlating with the active speaker
         });
       }
     };
