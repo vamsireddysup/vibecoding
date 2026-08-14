@@ -86,14 +86,35 @@ try a larger one.
 
 ## Record a meeting
 
-1. Open your meeting **in a browser tab**. The panel says when it recognizes one.
-2. Press **Start recording**, or hit <kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>
-   without opening the panel at all. Grant microphone access the first time.
-3. Talk. Transcript lines appear a few seconds behind the conversation, labelled with the
+1. Open your meeting **in a browser tab**.
+2. **Click the Meeting Notes icon in the toolbar while that tab is open.** This both opens
+   the side panel and gives the extension permission to capture that specific tab — see
+   below for why this step is not optional.
+3. Press **Start recording**. Grant microphone access the first time. The panel tells you
+   which tab it is about to record, and disables the button if there isn't one.
+4. Talk. Transcript lines appear a few seconds behind the conversation, labelled with the
    speaker's name where the extension can identify them, otherwise **You** / **Others**.
-4. Press **Stop recording**, then **Summarize with AI**.
+5. Press **Stop recording**, then **Summarize with AI**.
 
 You still hear everyone normally while recording.
+
+<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> starts and stops without opening the panel
+at all. A keyboard shortcut counts as invoking the extension, so it records the focused tab
+directly and step 2 does not apply.
+
+### Why you have to click the toolbar icon
+
+Chrome will not let an extension capture a tab unless the extension was **invoked on that
+tab** — by an icon click, a keyboard shortcut, or a context-menu entry. The grant then
+sticks to the tab until it navigates elsewhere.
+
+A button inside the side panel does **not** count: that gesture happens in the panel's own
+document, not in the page being recorded. If you see
+
+> Extension has not been invoked for the current page (see activeTab permission)
+
+click the toolbar icon on the meeting tab and press Start again. If the tab has navigated
+to a different site since you clicked, the grant is gone and you need to click once more.
 
 ## What you get
 

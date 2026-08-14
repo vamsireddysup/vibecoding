@@ -89,6 +89,9 @@ chrome.runtime.onMessage.addListener((message) => {
     case 'ANSWER_DELTA':
       if (openMeeting?.id === message.meetingId) renderStreamingAnswer(message.text);
       break;
+    case 'STATE_REFRESH':
+      refreshState();
+      break;
     case 'WARNING':
       alert_(message.message, message.fatal);
       break;
@@ -123,10 +126,41 @@ function renderRecordBar() {
   el.status.classList.toggle('is-live', recording);
 }
 
-function renderDetected(detectedMeeting) {
-  const show = Boolean(detectedMeeting) && !recording;
-  el.detected.hidden = !show;
-  if (show) el.detected.textContent = `${detectedMeeting} detected in this tab — ready to record.`;
+/**
+ * Says what will actually happen if Start is pressed.
+ *
+ * Chrome only lets the extension capture a tab it was opened from, so the panel
+ * has to distinguish "ready" from "nothing capturable" — otherwise Start looks
+ * available and then fails with a permissions error the user cannot act on.
+ */
+function renderDetected(state) {
+  if (recording) {
+    el.detected.hidden = true;
+    return;
+  }
+  if (!state.canRecord) {
+    el.detected.hidden = false;
+    el.detected.classList.add('is-blocked');
+    el.detected.textContent = state.invokeHint || 'Click the toolbar icon on your meeting tab.';
+    el.record.disabled = true;
+    return;
+  }
+  el.record.disabled = false;
+  el.detected.classList.remove('is-blocked');
+  el.detected.hidden = false;
+  el.detected.textContent = state.detectedMeeting
+    ? `${state.detectedMeeting} ready to record.`
+    : `Ready to record "${state.tabTitle || 'this tab'}".`;
+}
+
+/** The action click stores a new capturable tab; re-read state when it does. */
+async function refreshState() {
+  const state = await request('GET_STATE');
+  recording = state.recording;
+  activeMeetingId = state.meetingId;
+  renderRecordBar();
+  renderDetected(state);
+  return state;
 }
 
 el.record.addEventListener('click', async () => {
@@ -152,7 +186,7 @@ el.record.addEventListener('click', async () => {
   } finally {
     el.record.disabled = false;
     renderRecordBar();
-    el.detected.hidden = recording;
+    await refreshState();
   }
 });
 
@@ -597,11 +631,7 @@ function formatDuration(ms) {
 
 (async function init() {
   try {
-    const state = await request('GET_STATE');
-    recording = state.recording;
-    activeMeetingId = state.meetingId;
-    renderRecordBar();
-    renderDetected(state.detectedMeeting);
+    await refreshState();
     await refreshList();
     if (activeMeetingId) await showMeeting(activeMeetingId);
   } catch (err) {

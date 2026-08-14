@@ -44,20 +44,88 @@ export function detectMeeting(url = '') {
   return MEETING_PATTERNS.find((p) => p.test.test(url))?.platform || null;
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+/**
+ * `chrome.tabCapture` will not hand out a stream for a tab unless the extension
+ * has been *invoked* on that tab — Chrome grants that on an action click, a
+ * keyboard shortcut, or a context-menu use, and the grant then sticks to the
+ * tab until it navigates.
+ *
+ * Pressing a button inside the side panel is NOT an invocation: the gesture
+ * happens in the panel's own document, not in the page being captured. So the
+ * action click is handled explicitly here, rather than delegated to
+ * `setPanelBehavior({openPanelOnActionClick: true})` — that opens the panel
+ * *instead of* firing this listener, leaving the extension never invoked and
+ * every capture attempt failing with "Extension has not been invoked".
+ *
+ * The tab that was invoked is remembered so that Start captures *that* tab,
+ * not whichever tab happens to be focused when the button is finally pressed.
+ */
+const INVOKED_KEY = 'invokedTab';
+
+chrome.action.onClicked.addListener(async (tab) => {
+  if (tab?.id != null) {
+    await chrome.storage.local.set({
+      [INVOKED_KEY]: { tabId: tab.id, url: tab.url || '', title: tab.title || '', at: Date.now() },
+    });
+  }
+  try {
+    await chrome.sidePanel.open({ tabId: tab.id });
+  } catch {
+    // Older builds, or a window that cannot host the panel.
+    await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+  }
+  broadcast('STATE_REFRESH');
 });
 
-// Start/stop without opening the panel at all.
+// A keyboard shortcut is itself an invocation, so this path can capture the
+// focused tab directly without the action click.
 chrome.commands?.onCommand.addListener(async (command) => {
   if (command !== 'toggle-recording') return;
   try {
-    if (await getActiveMeetingId()) await stopRecording();
-    else await startRecording();
+    if (await getActiveMeetingId()) {
+      await stopRecording();
+      return;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id != null) {
+      await chrome.storage.local.set({
+        [INVOKED_KEY]: { tabId: tab.id, url: tab.url || '', title: tab.title || '', at: Date.now() },
+      });
+    }
+    await startRecording();
   } catch (err) {
     broadcast('WARNING', { message: String(err?.message || err), fatal: true });
   }
 });
+
+/**
+ * The tab the extension was invoked on, if it is still capturable.
+ *
+ * Navigation revokes the grant, so a tab that has since moved to a different
+ * page is treated as not invoked — better to say so than to fail inside
+ * getMediaStreamId with a message that blames the wrong thing.
+ */
+async function invokedTab() {
+  const stored = (await chrome.storage.local.get(INVOKED_KEY))[INVOKED_KEY];
+  if (!stored) return null;
+  const tab = await chrome.tabs.get(stored.tabId).catch(() => null);
+  if (!tab) return null;
+  if (stored.url && tab.url && originOf(tab.url) !== originOf(stored.url)) return null;
+  return tab;
+}
+
+function originOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}
+
+const INVOKE_HINT =
+  'Click the Meeting Notes icon in the toolbar while your meeting tab is open, then press ' +
+  'Start. Chrome only lets an extension capture a tab it has been opened from, and a button ' +
+  'inside this panel does not count.';
 
 // ---------------------------------------------------------------- offscreen
 
@@ -133,10 +201,13 @@ export function attributeSpeaker(line, log = speakerLog, now = Date.now()) {
 async function startRecording() {
   if (await getActiveMeetingId()) throw new Error('A recording is already in progress.');
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) throw new Error('No active tab to record.');
+  // Capture the tab the extension was opened from, not whichever tab happens to
+  // be focused now — the user may well have clicked back to the meeting after
+  // opening the panel, or away from it.
+  const tab = await invokedTab();
+  if (!tab?.id) throw new Error(INVOKE_HINT);
   if (/^(chrome|edge|about|chrome-extension):/i.test(tab.url || '')) {
-    throw new Error('Browser-internal pages cannot be captured. Switch to your meeting tab.');
+    throw new Error('Browser-internal pages cannot be captured. Open your meeting in a normal tab.');
   }
 
   // Must be obtained before the offscreen document asks for the stream.
@@ -144,10 +215,11 @@ async function startRecording() {
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
   } catch (err) {
-    throw new Error(
-      `Could not get audio access for this tab (${err?.message || err}). ` +
-        'Click the extension icon on the meeting tab, then press Start again.'
-    );
+    const detail = String(err?.message || err);
+    // The invocation grant is gone — usually because the tab navigated after
+    // the icon was clicked. Re-clicking the icon restores it.
+    if (/invoked|activeTab/i.test(detail)) throw new Error(INVOKE_HINT);
+    throw new Error(`Could not get audio access for that tab: ${detail}`);
   }
 
   const settings = await getSettings();
@@ -273,12 +345,16 @@ const handlers = {
   RENAME_SPEAKER: ({ meetingId, from, to }) => setSpeakerAlias(meetingId, from, to),
   GET_STATE: async () => {
     const meetingId = await getActiveMeetingId();
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    // Report the tab we can actually capture, so the panel never invites a
+    // click that is guaranteed to fail.
+    const tab = await invokedTab();
     return {
       recording: Boolean(meetingId),
       meetingId,
+      canRecord: Boolean(tab?.id),
       detectedMeeting: detectMeeting(tab?.url || ''),
       tabTitle: tab?.title || '',
+      invokeHint: INVOKE_HINT,
     };
   },
 };

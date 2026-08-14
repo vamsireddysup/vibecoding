@@ -402,6 +402,14 @@ h1 {
   display: none;
 }
 
+/* Not an error the user caused — an instruction they can act on. */
+.detected.is-blocked {
+  border-style: solid;
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
 /* ---------------------------------------------------------- speakers */
 
 .speakers {
